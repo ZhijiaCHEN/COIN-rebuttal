@@ -12,6 +12,7 @@ import random
 import matplotlib.pyplot as plt
 import os
 import logging
+import random
 logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
 
 # random.seed(0)
@@ -25,28 +26,21 @@ def reduce_dimensions(vectors):
     return points
 
 
-K = int(1e5)
+K = int(1e3)
 targetWords = ['bavarian', 'kenya', 'govan', 'evesham', 'luton', 'pudding', 'mayday', 'brine', 'sunglasses', 'patchwork']
-if os.path.isfile('wordVectors.npy') and os.path.isfile('contextVectors.npy') and os.path.isfile('targetWordsIndex.npy'):
-    print('Loading saved word vectors and context vectors...')
-    wordVectors = np.load('wordVectors.npy')
-    contextVectors = np.load('contextVectors.npy')
-    targetWordsIndex = np.load('targetWordsIndex.npy')
-else:
-    print('Loading model...')
-    model = fasttext.load_model('wiki.en.bin')
-    wordVectors = []
-    print('Building word vectors and context vectors...')
-    for word in model.words:
-        wordVectors.append(model.get_word_vector(word))
-    wordVectors = np.asfarray(wordVectors)
-    contextVectors = model.get_output_matrix()
-    # targetWords = [w for w in targetWords if model.get_word_id(w) != -1]
-    targetWordsIndex = [model.get_word_id(w) for w in targetWords]
-    print('Saving word vectors and context vectors...')
-    np.save('wordVectors.npy', wordVectors)
-    np.save('contextVectors.npy', contextVectors)
-    np.save('targetWordsIndex.npy', targetWordsIndex)
+print('Loading saved word vectors and context vectors...')
+
+model = Word2Vec.load('wiki.model')
+contextVectors = model.trainables.syn1neg
+wordVectors = model.wv.syn0
+# for i in random.sample(list(range(K)), K//10):
+#     wordVectors[i] = np.random.random(size=(400,))
+# for i in random.sample(list(range(K)), K//10):
+#     contextVectors[i] = np.random.random(size=(400,))
+
+
+targetWordsIndex = [model.wv.vocab[w].index for w in targetWords]
+
 
 def average_sim(A, B):
     ans = 0
@@ -58,6 +52,7 @@ def average_sim(A, B):
 N = len(targetWords)
 targetWordVec = wordVectors[targetWordsIndex, :]
 targetContextVec = contextVectors[targetWordsIndex, :]
+# targetContextVec = np.random.random(size=targetWordVec.shape)
 print(f'target words average similarity: {average_sim(targetWordVec, targetContextVec)}')
 # topKWordsIndexExcludeTarget = [i for i in range(min(K, len(model.wv.index_to_key))) if model.wv.index_to_key[i] not in targetWords]
 
