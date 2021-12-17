@@ -3,9 +3,10 @@ import gensim.downloader as api
 from gensim.test.utils import datapath
 from gensim import utils
 from gensim.models import Word2Vec
-from matplotlib.markers import MarkerStyle
-# from similarity_transform import absolute_orientation
-from absoluteOrientation import absolute_orientation
+# from matplotlib.markers import MarkerStyle
+from similarity_transform import absolute_orientation
+# from absoluteOrientation import absolute_orientation
+import absoluteOrientation, similarity_transform
 import numpy as np
 from sklearn.decomposition import IncrementalPCA    # inital reduction
 from sklearn.manifold import TSNE                   # final reduction
@@ -15,9 +16,16 @@ import matplotlib.pyplot as plt
 import os
 import logging
 import random
+plt.rcParams.update({'font.size': 5})
+alignFun = 1
+if alignFun == 1:
+    absolute_orientation = absoluteOrientation.absolute_orientation
+else:
+    absolute_orientation = similarity_transform.absolute_orientation
+
 logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
 FIG_SIZE = 5
-np.random.seed(0)
+np.random.seed(1)
 def reduce_dimensions(vectors):
     num_dimensions = 2  # final num dimensions (2D, 3D, etc)
 
@@ -47,11 +55,12 @@ targetWordsIndex = [model.wv.vocab[w].index for w in targetWords]
 # targetWordsIndex = random.sample(range(wordVectors.shape[0]), K)
 # targetWords = [model.wv.index2word[i] for i in targetWordsIndex]
 
-
 def average_sim(A, B):
     ans = 0
     for a, b in zip(A, B):
-        ans += np.inner(a, b)/(np.linalg.norm(a) * np.linalg.norm(b))
+        aNorm = np.linalg.norm(a)
+        bNorm = np.linalg.norm(b)
+        ans += (np.inner(a, b) / (aNorm * bNorm)) * 4/(2 + aNorm / bNorm + bNorm / aNorm)
     return ans/A.shape[0]
 
 # targetWordsIndex = random.sample(list(range(len(model.wv.index_to_key))), 10)
@@ -122,7 +131,7 @@ def tSNE_align_by_target_words(wordVectors, contextVectors):
 def tSNE_align_by_random_words(targetWordsIndex, wordVectors, contextVectors, showAlignWords = False):
     plt.figure(figsize=(FIG_SIZE, FIG_SIZE * 4))
     K = len(targetWordsIndex)
-    for i, N in enumerate([10, 100, 1000, 10000]):
+    for i, N in enumerate([500, 1000, 2000, 4000]):
         alignWordsIndex = targetWordsIndex
         while len(set(targetWordsIndex) & set(alignWordsIndex)) > 0:
             alignWordsIndex = random.sample(range(wordVectors.shape[0]), N)
@@ -138,10 +147,10 @@ def tSNE_align_by_random_words(targetWordsIndex, wordVectors, contextVectors, sh
         points = reduce_dimensions(np.concatenate((targetWordVec, alignWordVec, contextToWord)))
         plt.subplot(4,1,i+1)
         if showAlignWords:
-            X1 = [v[0] for v in points[:points.shape[0]//2]]
-            Y1 = [v[1] for v in points[:points.shape[0]//2]]
-            X2 = [v[0] for v in points[points.shape[0]//2:]]
-            Y2 = [v[1] for v in points[points.shape[0]//2:]]
+            X1 = [v[0] for v in points[:K+N]]
+            Y1 = [v[1] for v in points[:K+N]]
+            X2 = [v[0] for v in points[K+N:]]
+            Y2 = [v[1] for v in points[K+N:]]
             
             plt.scatter(X1, Y1, c='blue', alpha=0.3, s=5)
             plt.scatter(X2, Y2, c='red', alpha=0.3, s=5)
@@ -159,7 +168,69 @@ def tSNE_align_by_random_words(targetWordsIndex, wordVectors, contextVectors, sh
     plt.tight_layout()
     plt.show()
 
-tSNE_align_by_random_words(targetWordsIndex, wordVectors, contextVectors, showAlignWords = True)
+# tSNE_align_by_random_words(targetWordsIndex, wordVectors, contextVectors, showAlignWords = True)
+
+def tSNE_align_random_vectors():
+    plt.figure(figsize=(FIG_SIZE, FIG_SIZE * 4))
+    for i, N in enumerate([500, 1000, 2000, 4000]):
+        fromPoints = np.random.randint(low=1, high=10, size=(N, 400))
+        toPoints = np.random.randint(low=1, high=10, size=(N, 400))
+
+        avgSimBeforeAlignment = average_sim(fromPoints, toPoints)
+        alignedPoints = absolute_orientation(fromPoints, toPoints, fromPoints)
+        avgSimAfterAlignment = average_sim(toPoints, alignedPoints)
+        logging.info(f"tSNE_align_random_vectors: Performing t-SNE for N = {N}.")
+        points = reduce_dimensions(np.concatenate((toPoints, alignedPoints)))
+        plt.subplot(4,1,i+1)
+
+        X1 = [v[0] for v in points[:points.shape[0]//2]]
+        Y1 = [v[1] for v in points[:points.shape[0]//2]]
+        X2 = [v[0] for v in points[points.shape[0]//2:]]
+        Y2 = [v[1] for v in points[points.shape[0]//2:]]
+        
+        plt.scatter(X1, Y1, c='blue', alpha=0.3, s=5)
+        plt.scatter(X2, Y2, c='red', alpha=0.3, s=5)
+        
+        plt.title(f'{N=}. Avg. similarity: {avgSimBeforeAlignment:.2f} --> {avgSimAfterAlignment:.2f}.')
+    plt.tight_layout()
+    plt.show()
+
+def tSNE_align_random_vectors_by_random_vectors(showAlignPoints = True):
+    plt.figure(figsize=(FIG_SIZE, FIG_SIZE * 4))
+    K = 10
+    for i, N in enumerate([500, 1000, 2000, 4000]):
+        fromPointsTrain = np.random.randint(low=1, high=10, size=(N, 400))
+        toPointsTrain = np.random.randint(low=1, high=10, size=(N, 400))
+        fromPointsTest = np.random.randint(low=1, high=10, size=(K, 400))
+        toPointsTest = np.random.randint(low=1, high=10, size=(K, 400))
+
+
+        avgSimBeforeAlignment = average_sim(fromPointsTest, toPointsTest)
+        alignedPoints = absolute_orientation(fromPointsTrain, toPointsTrain, np.concatenate((fromPointsTest, fromPointsTrain)))
+        avgSimAfterAlignment = average_sim(toPointsTest, alignedPoints[:K])
+        logging.info(f"tSNE_align_random_vectors: Performing t-SNE for N = {N}.")
+        points = reduce_dimensions(np.concatenate((alignedPoints, toPointsTrain, toPointsTest)))
+        plt.subplot(4,1,i+1)
+        if showAlignPoints:
+            X1 = [v[0] for v in points[:K+N]]
+            Y1 = [v[1] for v in points[:K+N]]
+            X2 = [v[0] for v in points[K+N:]]
+            Y2 = [v[1] for v in points[K+N:]]
+            
+            plt.scatter(X1, Y1, c='blue', alpha=0.3, s=5)
+            plt.scatter(X2, Y2, c='red', alpha=0.3, s=5)
+
+        X1 = [v[0] for v in points[:K]]
+        Y1 = [v[1] for v in points[:K]]
+        X2 = [v[0] for v in points[-K:]]
+        Y2 = [v[1] for v in points[-K:]]
+        plt.scatter(X1, Y1, c='blue', marker='*')
+        plt.scatter(X2, Y2, c='red', marker='*')
+        plt.title(f'{N=}. Avg. similarity: {avgSimBeforeAlignment:.2f} --> {avgSimAfterAlignment:.2f}.')
+    plt.tight_layout()
+    plt.show()
+
+tSNE_align_random_vectors_by_random_vectors()
 exit()
 
 
