@@ -41,7 +41,7 @@ def absolute_orientation(from_points, to_points, targets):
     c = (d * S.diagonal()).sum() / sigma_from
     t = mean_to - c*R.dot(mean_from)
     M = c * R
-    ret = M.dot(from_points.T).T + t
+    ret = M.dot(targets.T).T + t
     return ret
 
 if __name__ == "__main__":
