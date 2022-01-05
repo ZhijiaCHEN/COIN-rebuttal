@@ -46,8 +46,6 @@ def reduce_dimensions(vectors):
     points = tsne.fit_transform(vectors)
     return points
 
-
-
 K = int(1e3)
 targetWords = ['bavarian', 'kenya', 'govan', 'evesham', 'luton', 'pudding', 'mayday', 'brine', 'sunglasses', 'patchwork']
 logging.info('Loading saved word vectors and context vectors...')
