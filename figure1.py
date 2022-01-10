@@ -4,7 +4,10 @@ from gensim.test.utils import datapath
 from gensim import utils
 from gensim.models import Word2Vec
 # from matplotlib.markers import MarkerStyle
+
+# the first and the second transformation function
 import absoluteOrientation, similarity_transform
+
 import numpy as np
 from sklearn.decomposition import IncrementalPCA    # inital reduction
 from sklearn.manifold import TSNE                   # final reduction
@@ -18,6 +21,7 @@ from pca import pca
 logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
 plt.rcParams.update({'font.size': 8})
 
+# the third transformation function
 def linear_transform(fromPoints, toPoints, target):
     M = np.linalg.pinv(fromPoints).dot(toPoints)
     return target.dot(M)
@@ -33,39 +37,32 @@ else:
     logging.info("Align with linear transformation.")
     absolute_orientation = linear_transform
 
-
+# set figure size
 FIG_SIZE = 4
 GraphSize = (2 * FIG_SIZE, 2 * FIG_SIZE)
 np.random.seed(1)
 random.seed(5)
+
+# reduce the vectors space to 2-dimensional space so we can see how well the word vectors and context vectors are aligned.
 def reduce_dimensions(vectors):
     num_dimensions = 2  # final num dimensions (2D, 3D, etc)
     vectors = pca(vectors)
     # reduce using t-SNE
-    tsne = TSNE(n_components=num_dimensions, random_state=0, perplexity=30)
+    tsne = TSNE(n_components=num_dimensions, perplexity=10)
     points = tsne.fit_transform(vectors)
     return points
 
-K = int(1e3)
 targetWords = ['bavarian', 'kenya', 'govan', 'evesham', 'luton', 'pudding', 'mayday', 'brine', 'sunglasses', 'patchwork']
 logging.info('Loading saved word vectors and context vectors...')
 
+# load pretrain wiki model, the latest version of gensim you can use is 3.8.3, so your gensim version should be something 3.*.* and <= 3.8.3
 model = Word2Vec.load('wiki.model')
-contextVectors = model.trainables.syn1neg
-wordVectors = model.wv.syn0
-# contextVectors = np.random.random(size=contextVectors.shape)
-# wordVectors = np.random.random(size=wordVectors.shape)
-
-# for i in random.sample(list(range(K)), K//10):
-#     wordVectors[i] = np.random.random(size=(400,))
-# for i in random.sample(list(range(K)), K//10):
-#     contextVectors[i] = np.random.random(size=(400,))
-
+contextVectors = model.trainables.syn1neg # each row is a context vector, sorted by word frequency
+wordVectors = model.wv.syn0 # each row is a word vector, sorted by word frequency
 
 targetWordsIndex = [model.wv.vocab[w].index for w in targetWords]
-# targetWordsIndex = random.sample(range(wordVectors.shape[0]), K)
-# targetWords = [model.wv.index2word[i] for i in targetWordsIndex]
 
+# compute the average similarity of two set of vectors
 def average_sim(A, B):
     ans = 0
     for a, b in zip(A, B):
@@ -74,6 +71,7 @@ def average_sim(A, B):
         ans += (np.inner(a, b) / (aNorm * bNorm)) * 4/(2 + aNorm / bNorm + bNorm / aNorm)
     return ans/A.shape[0]
 
+# compute the average distance of two set of vectors
 def average_distance(A, B):
     ans = 0
     for a, b in zip(A, B):
@@ -81,7 +79,7 @@ def average_distance(A, B):
     ans /= A.shape[0]
     return ans
 
-# targetWordsIndex = random.sample(list(range(len(model.wv.index_to_key))), 10)
+# select the word vectors and context vectors of the target words (some numpy tricks)
 N = len(targetWords)
 targetWordVec = wordVectors[targetWordsIndex, :]
 targetContextVec = contextVectors[targetWordsIndex, :]
@@ -89,8 +87,10 @@ targetContextVec = contextVectors[targetWordsIndex, :]
 # wordVectors = targetWordVec
 # contextVectors = targetContextVec
 # targetContextVec = np.random.random(size=targetWordVec.shape)
-print(f'target words average similarity: {average_sim(targetWordVec, targetContextVec)}')
+
+print(f'target words average similarity before alignment: {average_sim(targetWordVec, targetContextVec)}')
 # topKWordsIndexExcludeTarget = [i for i in range(min(K, len(model.wv.index_to_key))) if model.wv.index_to_key[i] not in targetWords]
+
 def tSNE_not_align(targetWordsIndex, wordVectors, contextVectors, tSNE_Size, onlyShowTarget = True):
     targetWordVec = wordVectors[targetWordsIndex, :]
     targetContextVec = contextVectors[targetWordsIndex, :]
@@ -123,6 +123,7 @@ def tSNE_not_align(targetWordsIndex, wordVectors, contextVectors, tSNE_Size, onl
 
 # tSNE_not_align(targetWordsIndex, wordVectors, contextVectors, K, True)
 
+# ignore this one
 def tSNE_align_by_target_words(wordVectors, contextVectors):
     plt.figure(figsize=GraphSize)
     for i, N in enumerate([10, 100, 1000, 10000]):
@@ -149,9 +150,11 @@ def tSNE_align_by_target_words(wordVectors, contextVectors):
 
 # tSNE_align_by_target_words(wordVectors, contextVectors)
 
+# You only need to read this function.
+# align the target words by random words, i.e., learn the transformation from random words
 def tSNE_align_by_random_words(targetWordsIndex, wordVectors, contextVectors, showAlignWords = False, tSNEtargetOnly = False):
     plt.figure(figsize=GraphSize)
-    K = len(targetWordsIndex)
+    K = len(targetWordsIndex) # the number of target words
     referWordsIndex = targetWordsIndex
     while len(set(targetWordsIndex) & set(referWordsIndex)) > 0:
         referWordsIndex = random.sample(range(wordVectors.shape[0]), K)
@@ -164,8 +167,9 @@ def tSNE_align_by_random_words(targetWordsIndex, wordVectors, contextVectors, sh
         targetContextVec = contextVectors[targetWordsIndex, :]
         referWordVec = wordVectors[referWordsIndex, :]
         referContextVec = contextVectors[referWordsIndex, :]
-        alignWordVec = wordVectors[alignWordsIndex, :]
-        alignContextVec = contextVectors[alignWordsIndex, :]
+        
+        alignWordVec = wordVectors[alignWordsIndex, :] # word vectors for alignment
+        alignContextVec = contextVectors[alignWordsIndex, :] # context vectors for alignment
 
         targetSimBeforeAlignment = average_sim(targetWordVec, targetContextVec)
         targetDistBeforeAlignment = average_distance(targetWordVec, targetContextVec)
@@ -217,7 +221,7 @@ def tSNE_align_by_random_words(targetWordsIndex, wordVectors, contextVectors, sh
     plt.tight_layout()
     plt.show()
 
-tSNE_align_by_random_words(targetWordsIndex, wordVectors, contextVectors, showAlignWords = True, tSNEtargetOnly = True)
+tSNE_align_by_random_words(targetWordsIndex, wordVectors, contextVectors, showAlignWords = True, tSNEtargetOnly = False)
 
 def tSNE_align_random_vectors():
     plt.figure(figsize=GraphSize)
